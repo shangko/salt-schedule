@@ -81,28 +81,19 @@
             const [staffs, setStaffs] = useState([]);
             const [saveStatus, setSaveStatus] = useState(null);
             
-            // 監聽日期變更
             useEffect(() => {
                 const monday = getMonday(new Date(startDate));
                 const newWeek = generateWeek(monday);
                 setDays(newWeek);
-                
                 const sunday = new Date(monday);
                 sunday.setDate(monday.getDate() + 6);
                 setPeriod(`${monday.getFullYear()}年 ${monday.getMonth() + 1}月 ${monday.getDate()}日 - ${sunday.getMonth() + 1}月 ${sunday.getDate()}日`);
-                
-                // 嘗試讀取該日期的存檔
                 const savedData = localStorage.getItem(`mk_schedule_${startDate}`);
                 if (savedData) {
                     setStaffs(JSON.parse(savedData));
                 } else {
-                    // 【關鍵修正】：如果該日期沒資料，不清空目前名單
-                    // 如果目前連一個人都沒有（初次開啟），才建立一個空的人員
                     setStaffs(currentStaffs => {
-                        if (currentStaffs.length > 0) {
-                            // 保留目前的所有名單與時間 (作為新一週的範本)
-                            return [...currentStaffs]; 
-                        }
+                        if (currentStaffs.length > 0) return [...currentStaffs]; 
                         return [{
                             id: Date.now(),
                             name: "新人員",
@@ -112,7 +103,6 @@
                 }
             }, [startDate]);
 
-            // 一鍵清除所有人的時間，但保留名字
             const clearAllShifts = () => {
                 if (window.confirm("確定要清除本週畫面上所有人的「時間」嗎？(名字會保留)")) {
                     setStaffs(prev => prev.map(staff => ({
@@ -125,13 +115,10 @@
             const handleSaveAndBackup = () => {
                 localStorage.setItem(`mk_schedule_${startDate}`, JSON.stringify(staffs));
                 localStorage.setItem('mk_storeName', storeName);
-                
                 const allData = {};
                 for (let i = 0; i < localStorage.length; i++) {
                     const key = localStorage.key(i);
-                    if (key.startsWith('mk_')) {
-                        allData[key] = localStorage.getItem(key);
-                    }
+                    if (key.startsWith('mk_')) allData[key] = localStorage.getItem(key);
                 }
                 const blob = new Blob([JSON.stringify(allData)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -139,8 +126,6 @@
                 a.href = url;
                 a.download = `排班備份_${storeName}_${startDate}.json`;
                 a.click();
-                URL.revokeObjectURL(url);
-
                 setSaveStatus('success');
                 setTimeout(() => setSaveStatus(null), 2000);
             };
@@ -152,14 +137,9 @@
                 reader.onload = (event) => {
                     try {
                         const data = JSON.parse(event.target.result);
-                        Object.keys(data).forEach(key => {
-                            localStorage.setItem(key, data[key]);
-                        });
-                        alert('備份讀取成功！');
+                        Object.keys(data).forEach(key => localStorage.setItem(key, data[key]));
                         window.location.reload();
-                    } catch (err) {
-                        alert('檔案格式錯誤');
-                    }
+                    } catch (err) { alert('格式錯誤'); }
                 };
                 reader.readAsText(file);
             };
@@ -174,105 +154,45 @@
                 loadingToast.innerText = "製作圖片中...";
                 loadingToast.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:9999;";
                 document.body.appendChild(loadingToast);
-
                 try {
                     const originalElement = tableRef.current;
                     const clone = originalElement.cloneNode(true);
-                    clone.style.position = 'absolute';
-                    clone.style.left = '-9999px';
-                    clone.style.top = '0';
-                    clone.style.width = '1180px'; 
-                    clone.style.backgroundColor = 'white';
-                    clone.style.padding = '20px'; 
-
+                    clone.style.position = 'absolute'; clone.style.left = '-9999px'; clone.style.width = '1180px'; clone.style.backgroundColor = 'white'; clone.style.padding = '20px'; 
                     const header = clone.querySelector('.hidden.print\\:block');
-                    if (header) {
-                        header.classList.remove('hidden');
-                        header.style.display = 'block';
-                    }
-
+                    if (header) { header.classList.remove('hidden'); header.style.display = 'block'; }
                     const stickyElements = clone.querySelectorAll('.sticky');
-                    stickyElements.forEach(el => {
-                        el.classList.remove('sticky');
-                        el.style.position = 'static';
-                        el.style.borderRight = '1px solid #e2e8f0'; 
-                    });
-
+                    stickyElements.forEach(el => { el.classList.remove('sticky'); el.style.position = 'static'; el.style.borderRight = '1px solid #e2e8f0'; });
                     const inputs = clone.querySelectorAll('input');
                     inputs.forEach(input => {
-                        const span = document.createElement('span');
-                        span.textContent = input.value;
-                        span.className = input.className.replace('w-20', '').replace('w-full', '');
-                        span.style.width = 'auto';
-                        span.style.minWidth = '50px';
-                        span.style.display = 'inline-block';
-                        
-                        if(input.parentNode) {
-                            input.parentNode.replaceChild(span, input);
-                        }
+                        const span = document.createElement('span'); span.textContent = input.value;
+                        span.className = input.className.replace('w-20', ''); span.style.display = 'inline-block';
+                        if(input.parentNode) input.parentNode.replaceChild(span, input);
                     });
-
                     document.body.appendChild(clone);
                     await new Promise(resolve => setTimeout(resolve, 100));
                     const canvas = await window.html2canvas(clone, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-                    const link = document.createElement('a');
-                    link.download = `${storeName}_${startDate}_班表.jpg`;
-                    link.href = canvas.toDataURL('image/jpeg', 0.9);
-                    link.click();
+                    const link = document.createElement('a'); link.download = `${storeName}_${startDate}_班表.jpg`;
+                    link.href = canvas.toDataURL('image/jpeg', 0.9); link.click();
                     document.body.removeChild(clone);
-                } catch (error) {
-                    alert("製作失敗，請重試");
-                } finally {
-                    if(document.body.contains(loadingToast)) document.body.removeChild(loadingToast);
-                }
+                } finally { if(document.body.contains(loadingToast)) document.body.removeChild(loadingToast); }
             };
 
             const calculateHours = (start, end) => {
                 if (!start || !end) return 0;
-                const s = parseFloat(start);
-                const e = parseFloat(end);
+                const s = parseFloat(start); const e = parseFloat(end);
                 return e > s ? e - s : 0;
             };
 
-            const getStaffTotalHours = (staff) => {
-                return staff.shifts.reduce((total, shift) => {
-                    const m = shift.morning ? calculateHours(shift.morning.start, shift.morning.end) : 0;
-                    const v = shift.evening ? calculateHours(shift.evening.start, shift.evening.end) : 0;
-                    return total + m + v;
-                }, 0);
-            };
+            const getStaffTotalHours = (staff) => staff.shifts.reduce((t, s) => t + (s.morning ? calculateHours(s.morning.start, s.morning.end) : 0) + (s.evening ? calculateHours(s.evening.start, s.evening.end) : 0), 0);
+            const getDailyTotalHours = (idx) => staffs.reduce((t, s) => {
+                const sh = s.shifts[idx]; if (!sh) return t;
+                return t + (sh.morning ? calculateHours(sh.morning.start, sh.morning.end) : 0) + (sh.evening ? calculateHours(sh.evening.start, sh.evening.end) : 0);
+            }, 0);
+            const getGrandTotalHours = () => staffs.reduce((t, s) => t + getStaffTotalHours(s), 0);
 
-            const getDailyTotalHours = (dayIndex) => {
-                return staffs.reduce((total, staff) => {
-                    const shift = staff.shifts[dayIndex];
-                    if (!shift) return total;
-                    const m = shift.morning ? calculateHours(shift.morning.start, shift.morning.end) : 0;
-                    const v = shift.evening ? calculateHours(shift.evening.start, shift.evening.end) : 0;
-                    return total + m + v;
-                }, 0);
-            };
-
-            const getGrandTotalHours = () => {
-                return staffs.reduce((total, staff) => total + getStaffTotalHours(staff), 0);
-            };
-
-            const addStaff = () => {
-                setStaffs([...staffs, {
-                    id: Date.now(),
-                    name: "新人員",
-                    shifts: Array(7).fill(null).map((_, i) => ({ day: i, morning: null, evening: null }))
-                }]);
-            };
-
-            const deleteStaff = (id) => {
-                if (window.confirm("確定要刪除這位人員嗎？")) {
-                    setStaffs(prev => prev.filter(s => s.id !== id));
-                }
-            };
-
-            const handleNameChange = (id, newName) => {
-                setStaffs(staffs.map(s => s.id === id ? { ...s, name: newName } : s));
-            };
+            const addStaff = () => setStaffs([...staffs, { id: Date.now(), name: "新人員", shifts: Array(7).fill(null).map((_, i) => ({ day: i, morning: null, evening: null })) }]);
+            const deleteStaff = (id) => { if (window.confirm("確定刪除？")) setStaffs(prev => prev.filter(s => s.id !== id)); };
+            const handleNameChange = (id, n) => setStaffs(staffs.map(s => s.id === id ? { ...s, name: n } : s));
 
             const openEdit = (staffId, dayIndex, type) => {
                 const staff = staffs.find(s => s.id === staffId);
@@ -286,11 +206,22 @@
                 setStaffs(staffs.map(s => {
                     if (s.id === staffId) {
                         const newShifts = [...s.shifts];
-                        if (tempTime.start === '' || tempTime.end === '') {
-                            newShifts[dayIndex][type] = null;
-                        } else {
-                            newShifts[dayIndex][type] = { start: parseFloat(tempTime.start), end: parseFloat(tempTime.end) };
-                        }
+                        if (tempTime.start === '' || tempTime.end === '') newShifts[dayIndex][type] = null;
+                        else newShifts[dayIndex][type] = { start: parseFloat(tempTime.start), end: parseFloat(tempTime.end) };
+                        return { ...s, shifts: newShifts };
+                    }
+                    return s;
+                }));
+                setEditingShift(null);
+            };
+
+            // 新增：清除特定班次功能
+            const clearShift = () => {
+                const { staffId, dayIndex, type } = editingShift;
+                setStaffs(staffs.map(s => {
+                    if (s.id === staffId) {
+                        const newShifts = [...s.shifts];
+                        newShifts[dayIndex][type] = null;
                         return { ...s, shifts: newShifts };
                     }
                     return s;
@@ -299,8 +230,7 @@
             };
             
             const changeWeek = (dir) => {
-                const d = new Date(startDate);
-                d.setDate(d.getDate() + (dir * 7));
+                const d = new Date(startDate); d.setDate(d.getDate() + (dir * 7));
                 setStartDate(d.toISOString().split('T')[0]);
             };
 
@@ -309,36 +239,28 @@
                     <div className="max-w-7xl mx-auto mb-6 no-print">
                         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
                             <div className="flex-1">
-                                <input 
-                                    className="text-2xl font-bold text-green-700 bg-transparent border-b border-transparent hover:border-green-200 focus:border-green-500 focus:outline-none w-full"
-                                    value={storeName}
-                                    onChange={(e) => setStoreName(e.target.value)}
-                                />
+                                <input className="text-2xl font-bold text-green-700 bg-transparent focus:outline-none w-full" value={storeName} onChange={(e) => setStoreName(e.target.value)}/>
                                 <div className="flex items-center gap-3 mt-2">
-                                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
-                                        <button onClick={() => changeWeek(-1)} className="p-1 hover:bg-white rounded transition-colors"><Icons.ChevronLeft className="w-4 h-4"/></button>
-                                        <input type="date" className="bg-transparent border-none text-sm font-bold w-32 focus:outline-none" value={startDate} onChange={(e) => setStartDate(e.target.value)}/>
-                                        <button onClick={() => changeWeek(1)} className="p-1 hover:bg-white rounded transition-colors"><Icons.ChevronRight className="w-4 h-4"/></button>
+                                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+                                        <button onClick={() => changeWeek(-1)} className="p-1 hover:bg-white rounded"><Icons.ChevronLeft className="w-4 h-4"/></button>
+                                        <input type="date" className="bg-transparent border-none text-sm font-bold w-32" value={startDate} onChange={(e) => setStartDate(e.target.value)}/>
+                                        <button onClick={() => changeWeek(1)} className="p-1 hover:bg-white rounded"><Icons.ChevronRight className="w-4 h-4"/></button>
                                     </div>
-                                    <span className="text-slate-500 text-sm font-bold tracking-tight">{period}</span>
+                                    <span className="text-slate-500 text-sm font-medium">{period}</span>
                                 </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <label className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 text-sm cursor-pointer hover:bg-slate-100 transition-colors">
+                                <label className="flex items-center gap-1 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 text-sm cursor-pointer hover:bg-slate-100">
                                     <Icons.Upload className="w-4 h-4 text-blue-500"/> 讀取備份檔
                                     <input type="file" accept=".json" onChange={handleRestore} className="hidden" />
                                 </label>
-                                <div className="w-px h-6 bg-slate-200 mx-1 hidden md:block"></div>
-                                <button 
-                                    onClick={handleSaveAndBackup} 
-                                    className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold text-white transition-all shadow-md active:scale-95 ${saveStatus ? 'bg-green-500' : 'bg-green-600 hover:bg-green-700'}`}
-                                >
+                                <button onClick={handleSaveAndBackup} className={`flex items-center gap-2 px-5 py-2 rounded-lg font-bold text-white transition-all shadow-md ${saveStatus ? 'bg-green-500' : 'bg-green-600 hover:bg-green-700'}`}>
                                     {saveStatus ? <><Icons.CheckCircle className="w-5 h-5"/> 已儲存並備份</> : <><Icons.Save className="w-5 h-5"/> 儲存並下載備份</>}
                                 </button>
-                                <button onClick={addStaff} className="bg-white border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 text-sm hover:bg-slate-50 shadow-sm"><Icons.Plus className="w-4 h-4 inline mr-1 text-green-500" />新增人員</button>
-                                <button onClick={clearAllShifts} className="bg-white border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-400 text-sm hover:text-orange-500 hover:bg-orange-50 transition-colors shadow-sm" title="清除本週所有上班時間，保留名字"><Icons.Eraser className="w-4 h-4 inline mr-1" />清空本週班次</button>
-                                <button onClick={handleExportImage} className="bg-blue-600 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 shadow-md"><Icons.Image className="w-4 h-4 inline mr-1" />匯出</button>
-                                <button onClick={() => window.print()} className="bg-white border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 text-sm hover:bg-slate-50 shadow-sm"><Icons.Printer className="w-4 h-4 inline mr-1" />列印</button>
+                                <button onClick={addStaff} className="bg-white border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 text-sm hover:bg-slate-50"><Icons.Plus className="w-4 h-4 inline mr-1 text-green-500" />新增人員</button>
+                                <button onClick={clearAllShifts} className="bg-white border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-400 text-sm hover:text-orange-500 transition-colors" title="清除本週所有上班時間"><Icons.Eraser className="w-4 h-4 inline mr-1" />清空本週班次</button>
+                                <button onClick={handleExportImage} className="bg-blue-600 text-white px-3 py-2 rounded-lg font-bold text-sm hover:bg-blue-700"><Icons.Image className="w-4 h-4 inline mr-1" />匯出</button>
+                                <button onClick={() => window.print()} className="bg-white border border-slate-200 px-3 py-2 rounded-lg font-bold text-slate-600 text-sm hover:bg-slate-50"><Icons.Printer className="w-4 h-4 inline mr-1" />列印</button>
                             </div>
                         </div>
                     </div>
@@ -353,16 +275,11 @@
                                 <table className="w-full border-collapse">
                                     <thead>
                                         <tr className="bg-slate-50 border-b border-slate-200">
-                                            <th className="p-3 text-left font-bold text-slate-600 sticky left-0 bg-slate-50 z-10 w-32 border-r border-slate-200 text-sm shadow-[2px_0_5px_rgba(0,0,0,0.05)]">人員</th>
+                                            <th className="p-3 text-left font-bold text-slate-600 sticky left-0 bg-slate-50 z-10 w-32 border-r border-slate-200 text-sm">人員</th>
                                             {days.map((day, idx) => (
                                                 <th key={idx} className="p-0 border-r border-slate-200 min-w-[100px]">
-                                                    <div className="p-2 text-sm font-bold text-slate-700 text-center border-b border-slate-200 bg-slate-100">
-                                                        {day.date}<span className="text-xs font-normal text-slate-500 ml-1">({day.weekDay})</span>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 text-[10px] font-black text-slate-400 text-center uppercase py-0.5">
-                                                        <div className="border-r border-slate-100">早</div>
-                                                        <div>晚</div>
-                                                    </div>
+                                                    <div className="p-2 text-sm font-bold text-slate-700 text-center border-b border-slate-200 bg-slate-100">{day.date}({day.weekDay})</div>
+                                                    <div className="grid grid-cols-2 text-[10px] font-black text-slate-400 text-center py-0.5"><div className="border-r border-slate-100">早</div><div>晚</div></div>
                                                 </th>
                                             ))}
                                             <th className="p-3 text-center font-bold text-slate-600 w-20 text-sm">週時數</th>
@@ -370,37 +287,21 @@
                                     </thead>
                                     <tbody>
                                         {staffs.map((staff) => (
-                                            <tr key={staff.id} className="border-b border-slate-200 group hover:bg-slate-50/50 transition-colors">
-                                                <td className="p-2 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.02)]">
+                                            <tr key={staff.id} className="border-b border-slate-200 group hover:bg-slate-50/50">
+                                                <td className="p-2 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-200">
                                                     <div className="flex items-center justify-between">
                                                         <input className="font-bold text-slate-800 bg-transparent border-none focus:outline-none w-20 text-sm" value={staff.name} onChange={(e) => handleNameChange(staff.id, e.target.value)}/>
-                                                        <button onClick={() => deleteStaff(staff.id)} className="no-print text-slate-200 hover:text-red-500 transition-colors p-1" title="刪除人員">
-                                                            <Icons.Trash2 className="w-4 h-4" />
-                                                        </button>
+                                                        <button onClick={() => deleteStaff(staff.id)} className="no-print text-slate-200 hover:text-red-500 p-1"><Icons.Trash2 className="w-4 h-4" /></button>
                                                     </div>
                                                 </td>
                                                 {staff.shifts.map((shift, dIdx) => (
                                                     <td key={dIdx} className="p-0 border-r border-slate-100">
                                                         <div className="grid grid-cols-2 h-full min-h-[75px]">
-                                                            <div onClick={() => openEdit(staff.id, dIdx, 'morning')} className={`p-1.5 flex flex-col items-center justify-center cursor-pointer border-r border-slate-50 hover:brightness-95 transition-all ${shift.morning ? 'bg-orange-50' : 'bg-transparent text-slate-100'}`}>
-                                                                {shift.morning ? (
-                                                                    <>
-                                                                        <span className="text-xs font-black text-orange-700 mb-0.5">{shift.morning.start}</span>
-                                                                        <span className="text-[10px] font-black text-orange-300 leading-none">|</span>
-                                                                        <span className="text-xs font-black text-orange-700 mt-0.5">{shift.morning.end}</span>
-                                                                        <div className="mt-1 px-1 bg-white/90 rounded text-[9px] text-orange-600 font-bold border border-orange-200 leading-none py-0.5">{calculateHours(shift.morning.start, shift.morning.end)}h</div>
-                                                                    </>
-                                                                ) : <span className="no-print text-xs">+</span>}
+                                                            <div onClick={() => openEdit(staff.id, dIdx, 'morning')} className={`p-1.5 flex flex-col items-center justify-center cursor-pointer border-r border-slate-50 ${shift.morning ? 'bg-orange-50' : 'bg-transparent text-slate-100'}`}>
+                                                                {shift.morning ? <><span className="text-xs font-black text-orange-700">{shift.morning.start}</span><span className="text-[10px] font-black text-orange-300">|</span><span className="text-xs font-black text-orange-700">{shift.morning.end}</span><div className="mt-1 px-1 bg-white/90 rounded text-[9px] text-orange-600 font-bold border border-orange-200">{calculateHours(shift.morning.start, shift.morning.end)}h</div></> : <span className="no-print text-xs">+</span>}
                                                             </div>
-                                                            <div onClick={() => openEdit(staff.id, dIdx, 'evening')} className={`p-1.5 flex flex-col items-center justify-center cursor-pointer hover:brightness-95 transition-all ${shift.evening ? 'bg-blue-50' : 'bg-transparent text-slate-100'}`}>
-                                                                {shift.evening ? (
-                                                                    <>
-                                                                        <span className="text-xs font-black text-blue-700 mb-0.5">{shift.evening.start}</span>
-                                                                        <span className="text-[10px] font-black text-blue-300 leading-none">|</span>
-                                                                        <span className="text-xs font-black text-blue-700 mt-0.5">{shift.evening.end}</span>
-                                                                        <div className="mt-1 px-1 bg-white/90 rounded text-[9px] text-orange-600 font-bold border border-blue-200 leading-none py-0.5">{calculateHours(shift.evening.start, shift.evening.end)}h</div>
-                                                                    </>
-                                                                ) : <span className="no-print text-xs">+</span>}
+                                                            <div onClick={() => openEdit(staff.id, dIdx, 'evening')} className={`p-1.5 flex flex-col items-center justify-center cursor-pointer ${shift.evening ? 'bg-blue-50' : 'bg-transparent text-slate-100'}`}>
+                                                                {shift.evening ? <><span className="text-xs font-black text-blue-700">{shift.evening.start}</span><span className="text-[10px] font-black text-blue-300">|</span><span className="text-xs font-black text-blue-700">{shift.evening.end}</span><div className="mt-1 px-1 bg-white/90 rounded text-[9px] text-blue-600 font-bold border border-blue-200">{calculateHours(shift.evening.start, shift.evening.end)}h</div></> : <span className="no-print text-xs">+</span>}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -411,15 +312,9 @@
                                     </tbody>
                                     <tfoot className="bg-slate-50 font-bold text-slate-700 border-t-2 border-slate-300">
                                         <tr>
-                                            <td className="p-2 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 text-sm text-center shadow-[2px_0_5px_rgba(0,0,0,0.05)]">單日總工時</td>
-                                            {days.map((_, idx) => (
-                                                <td key={idx} className="p-2 text-center border-r border-slate-200 text-blue-600 text-sm">
-                                                    {getDailyTotalHours(idx)}h
-                                                </td>
-                                            ))}
-                                            <td className="p-2 text-center text-green-700 bg-green-50 text-sm">
-                                                {getGrandTotalHours()}h
-                                            </td>
+                                            <td className="p-2 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 text-sm text-center">單日總工時</td>
+                                            {days.map((_, idx) => ( <td key={idx} className="p-2 text-center border-r border-slate-200 text-blue-600 text-sm">{getDailyTotalHours(idx)}h</td> ))}
+                                            <td className="p-2 text-center text-green-700 bg-green-50 text-sm">{getGrandTotalHours()}h</td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -431,33 +326,27 @@
                         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 no-print">
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
                                 <div className={`p-4 ${editingShift.type === 'morning' ? 'bg-orange-500' : 'bg-blue-600'} text-white flex justify-between items-center`}>
-                                    <h3 className="font-bold text-lg tracking-wider">編輯{editingShift.type === 'morning' ? '早班' : '晚班'}</h3>
-                                    <button onClick={() => setEditingShift(null)} className="hover:rotate-90 transition-transform"><Icons.X className="w-6 h-6" /></button>
+                                    <h3 className="font-bold text-lg">編輯{editingShift.type === 'morning' ? '早班' : '晚班'}</h3>
+                                    <button onClick={() => setEditingShift(null)}><Icons.X className="w-6 h-6" /></button>
                                 </div>
                                 <div className="p-6">
                                     <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-tighter">上班時間</label>
-                                            <input type="number" step="0.5" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-green-500 focus:outline-none font-bold text-lg text-center" value={tempTime.start} onChange={(e) => setTempTime({...tempTime, start: e.target.value})}/>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-tighter">下班時間</label>
-                                            <input type="number" step="0.5" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-green-500 focus:outline-none font-bold text-lg text-center" value={tempTime.end} onChange={(e) => setTempTime({...tempTime, end: e.target.value})}/>
-                                        </div>
+                                        <div><label className="block text-xs font-bold text-slate-400 mb-2 uppercase">上班時間</label><input type="number" step="0.5" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-green-500 focus:outline-none font-bold text-lg text-center" value={tempTime.start} onChange={(e) => setTempTime({...tempTime, start: e.target.value})}/></div>
+                                        <div><label className="block text-xs font-bold text-slate-400 mb-2 uppercase">下班時間</label><input type="number" step="0.5" className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-green-500 focus:outline-none font-bold text-lg text-center" value={tempTime.end} onChange={(e) => setTempTime({...tempTime, end: e.target.value})}/></div>
                                     </div>
-                                    <div className="flex gap-3">
-                                        <button onClick={() => setEditingShift(null)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">取消</button>
-                                        <button onClick={saveShift} className={`flex-1 py-3 rounded-xl text-white font-bold shadow-lg transition-all active:scale-95 ${editingShift.type === 'morning' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>套用班表</button>
+                                    <div className="flex flex-col gap-2">
+                                        <button onClick={saveShift} className={`w-full py-3 rounded-xl text-white font-bold shadow-lg ${editingShift.type === 'morning' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>套用班表</button>
+                                        <div className="flex gap-2">
+                                            <button onClick={clearShift} className="flex-1 py-2 font-bold text-red-500 hover:bg-red-50 rounded-xl border border-red-100 transition-colors text-sm">清除此班次</button>
+                                            <button onClick={() => setEditingShift(null)} className="flex-1 py-2 font-bold text-slate-400 hover:bg-slate-50 rounded-xl transition-colors text-sm">取消</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     )}
                     
-                    <div className="max-w-7xl mx-auto mt-6 text-center text-xs text-slate-400 no-print font-medium leading-relaxed">
-                        提示：切換日期時，名單與時間會自動沿用以便您快速排班。<br/>
-                        若要為新的一週重新排班，可使用「清空本週班次」保留名字並清除時間。
-                    </div>
+                    <div className="max-w-7xl mx-auto mt-6 text-center text-xs text-slate-400 no-print font-medium">切換日期時，名單與時間會自動沿用以便您快速排班。</div>
                 </div>
             );
         };
